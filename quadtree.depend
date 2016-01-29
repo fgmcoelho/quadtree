@@ -1,0 +1,9 @@
+# depslib dependency file v1.0
+1454102732 source:/home/fcoelho/sandbox/quadtree/main.c
+	"orx.h"
+	<time.h>
+	<stdio.h>
+	<stdlib.h>
+	<assert.h>
+	<string.h>
+
