@@ -99,6 +99,7 @@ static int quad_tree_node_divide(struct quad_tree_st* node){
 //    printf("SW node (%d, %d) -> (%d, %d)\n", new_area.left,
 //        new_area.bottom, new_area.right, new_area.top);
     assert(node->sw != NULL);
+
     FILL_AREA(new_area, midX, node->area.right, node->area.bottom, midY);
     node->se = quad_tree_create_node(node, &new_area);
 //    printf("SE node (%d, %d) -> (%d, %d)\n", new_area.left,
@@ -121,7 +122,9 @@ void quad_tree_insert_object(
         return;
 	}
 	else{
-        quad_tree_node_divide(node);
+        if (node->sw == NULL){
+            quad_tree_node_divide(node);
+        }
         quad_tree_insert_object(node->nw, object);
         quad_tree_insert_object(node->ne, object);
         quad_tree_insert_object(node->sw, object);
@@ -129,9 +132,21 @@ void quad_tree_insert_object(
 	}
 }
 
+void quad_tree_clear(struct quad_tree_st* node){
+    if (node != NULL){
+        if (node->sw != NULL){
+            quad_tree_clear(node->nw);
+            quad_tree_clear(node->ne);
+            quad_tree_clear(node->sw);
+            quad_tree_clear(node->se);
+        }
+        free(node);
+    }
+}
+
 static void plot_quad_tree(struct quad_tree_st* node){
     if (node->sw == NULL){
-        orxVECTOR points[5];
+        orxVECTOR points[4];
         points[0].fX = node->area.left;
         points[0].fY = node->area.bottom;
         points[0].fZ = 0;
@@ -144,12 +159,9 @@ static void plot_quad_tree(struct quad_tree_st* node){
         points[3].fX = node->area.right;
         points[3].fY = node->area.bottom;
         points[3].fZ = 0;
-//        points[4].fX = node->area.left;
-//        points[4].fY = node->area.bottom;
-//        points[4].fZ = 0;
         orxRGBA color;
-        color.u8A = 0x127;
-        color.u8G = 0x00;
+        color.u8A = 0x80;
+        color.u8G = orxMath_GetRandomU32(0, 255);
         if (node->closed){
             color.u8R = 0x00;
             color.u8B = 0xFF;
@@ -170,11 +182,15 @@ static void plot_quad_tree(struct quad_tree_st* node){
     }
 }
 
-orxSTATUS orxFASTCALL Exit(){
-    return orxSTATUS_SUCCESS;
-}
 
 orxVIEWPORT* viewport;
+orxVECTOR mousePos, worldPos, screenPos;
+orxBOOL newTouch, drawned, treePloted;
+
+orxSTATUS orxFASTCALL Exit(){
+    quad_tree_clear(root);
+    return orxSTATUS_SUCCESS;
+}
 
 orxSTATUS orxFASTCALL Run(){
 
@@ -204,27 +220,59 @@ orxSTATUS orxFASTCALL Run(){
     }
 
     //orxLOG("Camera pos: %f %f", pos.fX, pos.fY);
-    orxRGBA color;
-    color.u8A = 0x127;
-    color.u8G = 0xFF;
-    color.u8R = 0x00;
-    color.u8B = 0x00;
 
-    pos.fZ = -1.0;
-    orxDisplay_DrawCircle(&pos, 1000, color, orxTRUE);
+    if(orxMouse_IsButtonPressed(orxMOUSE_BUTTON_LEFT) == orxTRUE && newTouch == orxTRUE){
+        orxMouse_GetPosition(&mousePos);
+        orxRender_GetWorldPosition(&mousePos, viewport, &worldPos);
+        worldPos.fZ = mousePos.fZ = screenPos.fZ = 0.;
+        if (orxRender_GetScreenPosition(&worldPos, viewport, &screenPos) == orxNULL){
+            orxLOG("Failed to convert the position.");
+        }
+        orxLOG("Drawing: %f %f %f?", worldPos.fX, worldPos.fY, worldPos.fZ);
+        orxLOG("Drawing: %f %f %f?", mousePos.fX, mousePos.fY, mousePos.fZ);
+        orxLOG("Drawing: %f %f %f?", screenPos.fX, screenPos.fY, screenPos.fZ);
+
+        //orxOBJECT* obj = orxObject_CreateFromConfig("test");
+        //orxObject_SetPosition(obj, &worldPos);
+        newTouch = orxFALSE;
+    }
+    else{
+        drawned = orxFALSE;
+        newTouch = orxTRUE;
+    }
+
+
+    return orxSTATUS_SUCCESS;
+}
+
+static orxSTATUS orxFASTCALL draw_basic(const orxEVENT* event){
+    if (event->eID ==  orxRENDER_EVENT_VIEWPORT_STOP){
+        plot_quad_tree(root);
+    }
 
     return orxSTATUS_SUCCESS;
 }
 
 orxSTATUS orxFASTCALL Init(){
-
+    newTouch = orxTRUE;
+    drawned = orxTRUE;
+    treePloted = orxFALSE;
     viewport = orxViewport_CreateFromConfig("Viewport");
+    orxMouse_ShowCursor(orxTRUE);
+    orxEvent_AddHandler(orxEVENT_TYPE_RENDER, draw_basic);
 
-    struct area_st temp_area, object;
-    FILL_AREA(temp_area, 0, 1000, 0, 1000);
+    struct area_st temp_area, object, object2, object3;
+    FILL_AREA(temp_area, 200, 400, 200, 400);
     root = quad_tree_create_node(NULL, &temp_area);
-    FILL_AREA(object, 80, 100, 80, 100);
+
+    FILL_AREA(object, 270, 300, 280, 300);
     quad_tree_insert_object(root, &object);
+
+    FILL_AREA(object2, 200, 240, 200, 240);
+    quad_tree_insert_object(root, &object2);
+
+    FILL_AREA(object3, 350, 400, 350, 400);
+    quad_tree_insert_object(root, &object3);
 
     return orxSTATUS_SUCCESS;
 }
