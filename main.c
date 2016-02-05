@@ -26,9 +26,6 @@ struct quad_tree_st {
 static struct quad_tree_st* root;
 
 int area_intersect(struct area_st* first, struct area_st* second){
-//	printf("Testing (%d %d) -> (%d %d) intersects with (%d %d) -> (%d %d).\n",
-//        first->left, first->bottom, first->right, first->top,
-//        second->left, second->bottom, second->right, second->top);
     return !(second->left > first->right || second->right < first->left ||
 		second->top < first->bottom || second->bottom > first->top);
 }
@@ -38,10 +35,6 @@ int area_intersect(struct area_st* first, struct area_st* second){
 #define PERFECTLY_CONTAINS 2
 
 int area_contains(struct area_st* node_area, struct area_st* object_area){
-//	printf("Testing (%d %d) -> (%d %d) against (%d %d) -> (%d %d).\n",
-//        node_area->left, node_area->bottom, node_area->right, node_area->top,
-//        object_area->left, object_area->bottom, object_area->right, object_area->top);
-
     if (node_area->left >= object_area->right
             || node_area->right <= object_area->left
             || node_area->top <= object_area->bottom
@@ -86,24 +79,18 @@ static int quad_tree_node_divide(struct quad_tree_st* node){
 
     FILL_AREA(new_area, node->area.left, midX, midY, node->area.top);
 	node->nw = quad_tree_create_node(node, &new_area);
-//    printf("NW node (%d, %d) -> (%d, %d)\n", new_area.left,
-//        new_area.bottom, new_area.right, new_area.top);
  	assert(node->nw != NULL);
+
     FILL_AREA(new_area, midX, node->area.right, midY, node->area.top);
     node->ne = quad_tree_create_node(node, &new_area);
-//    printf("NE node (%d, %d) -> (%d, %d)\n", new_area.left,
-//        new_area.bottom, new_area.right, new_area.top);
 	assert(node->ne != NULL);
+
     FILL_AREA(new_area, node->area.left, midX, node->area.bottom, midY);
     node->sw = quad_tree_create_node(node, &new_area);
-//    printf("SW node (%d, %d) -> (%d, %d)\n", new_area.left,
-//        new_area.bottom, new_area.right, new_area.top);
     assert(node->sw != NULL);
 
     FILL_AREA(new_area, midX, node->area.right, node->area.bottom, midY);
     node->se = quad_tree_create_node(node, &new_area);
-//    printf("SE node (%d, %d) -> (%d, %d)\n", new_area.left,
-//        new_area.bottom, new_area.right, new_area.top);
     assert(node->se != NULL);
 
     return 1;
@@ -144,35 +131,37 @@ void quad_tree_clear(struct quad_tree_st* node){
     }
 }
 
+orxVIEWPORT* viewport;
+orxU8 blueCount, redCount;
+
 static void plot_quad_tree(struct quad_tree_st* node){
     if (node->sw == NULL){
-        orxVECTOR points[4];
-        points[0].fX = node->area.left;
-        points[0].fY = node->area.bottom;
-        points[0].fZ = 0;
-        points[1].fX = node->area.left;
-        points[1].fY = node->area.top;
-        points[1].fZ = 0;
-        points[2].fX = node->area.right;
-        points[2].fY = node->area.top;
-        points[2].fZ = 0;
-        points[3].fX = node->area.right;
-        points[3].fY = node->area.bottom;
-        points[3].fZ = 0;
+        orxVECTOR points[4], screenPoints[4];
+        orxU32 i;
+        orxVector_Set(&points[0], node->area.left, node->area.bottom, orxFLOAT_0);
+        orxVector_Set(&points[1], node->area.left, node->area.top, orxFLOAT_0);
+        orxVector_Set(&points[2], node->area.right, node->area.top, orxFLOAT_0);
+        orxVector_Set(&points[3], node->area.right, node->area.bottom, orxFLOAT_0);
+
+        for (i = 0; i < 4; ++i){
+            orxRender_GetScreenPosition(&points[i], viewport, &screenPoints[i]);
+        }
+
         orxRGBA color;
         color.u8A = 0x80;
-        color.u8G = orxMath_GetRandomU32(0, 255);
         if (node->closed){
+            color.u8G = blueCount;
             color.u8R = 0x00;
             color.u8B = 0xFF;
+            blueCount += 0x20;
         }
         else{
+            color.u8G = redCount;
             color.u8R = 0xFF;
             color.u8B = 0x00;
+            redCount += 0x20;
         }
-        orxDisplay_DrawPolygon(
-            &points, 4, color, orxTRUE
-        );
+        orxDisplay_DrawPolygon(&screenPoints, 4, color, orxTRUE);
     }
     else{
         plot_quad_tree(node->nw);
@@ -181,11 +170,6 @@ static void plot_quad_tree(struct quad_tree_st* node){
         plot_quad_tree(node->se);
     }
 }
-
-
-orxVIEWPORT* viewport;
-orxVECTOR mousePos, worldPos, screenPos;
-orxBOOL newTouch, drawned, treePloted;
 
 orxSTATUS orxFASTCALL Exit(){
     quad_tree_clear(root);
@@ -197,56 +181,33 @@ orxSTATUS orxFASTCALL Run(){
     orxCAMERA* camera = orxViewport_GetCamera(viewport);
     orxVECTOR pos;
     orxCamera_GetPosition(camera, &pos);
-    if(orxInput_IsActive("GoRight"))
-    {
-        pos.fX += 1;
+
+    if(orxInput_IsActive("GoRight")) {
+        pos.fX += 3;
         orxCamera_SetPosition(camera, &pos);
     }
-    /* Is walk left active? */
-    else if(orxInput_IsActive("GoLeft"))
-    {
-        pos.fX -= 1;
+    else if(orxInput_IsActive("GoLeft")) {
+        pos.fX -= 3;
         orxCamera_SetPosition(camera, &pos);
     }
-    else if(orxInput_IsActive("GoUp"))
-    {
-        pos.fY += 1;
+    else if(orxInput_IsActive("GoUp")) {
+        pos.fY -= 3;
         orxCamera_SetPosition(camera, &pos);
     }
-    else if(orxInput_IsActive("GoDown"))
-    {
-        pos.fY -= 1;
+    else if(orxInput_IsActive("GoDown")) {
+        pos.fY += 3;
         orxCamera_SetPosition(camera, &pos);
     }
 
     //orxLOG("Camera pos: %f %f", pos.fX, pos.fY);
-
-    if(orxMouse_IsButtonPressed(orxMOUSE_BUTTON_LEFT) == orxTRUE && newTouch == orxTRUE){
-        orxMouse_GetPosition(&mousePos);
-        orxRender_GetWorldPosition(&mousePos, viewport, &worldPos);
-        worldPos.fZ = mousePos.fZ = screenPos.fZ = 0.;
-        if (orxRender_GetScreenPosition(&worldPos, viewport, &screenPos) == orxNULL){
-            orxLOG("Failed to convert the position.");
-        }
-        orxLOG("Drawing: %f %f %f?", worldPos.fX, worldPos.fY, worldPos.fZ);
-        orxLOG("Drawing: %f %f %f?", mousePos.fX, mousePos.fY, mousePos.fZ);
-        orxLOG("Drawing: %f %f %f?", screenPos.fX, screenPos.fY, screenPos.fZ);
-
-        //orxOBJECT* obj = orxObject_CreateFromConfig("test");
-        //orxObject_SetPosition(obj, &worldPos);
-        newTouch = orxFALSE;
-    }
-    else{
-        drawned = orxFALSE;
-        newTouch = orxTRUE;
-    }
-
 
     return orxSTATUS_SUCCESS;
 }
 
 static orxSTATUS orxFASTCALL draw_basic(const orxEVENT* event){
     if (event->eID ==  orxRENDER_EVENT_VIEWPORT_STOP){
+        blueCount = 0;
+        redCount = 0;
         plot_quad_tree(root);
     }
 
@@ -254,9 +215,6 @@ static orxSTATUS orxFASTCALL draw_basic(const orxEVENT* event){
 }
 
 orxSTATUS orxFASTCALL Init(){
-    newTouch = orxTRUE;
-    drawned = orxTRUE;
-    treePloted = orxFALSE;
     viewport = orxViewport_CreateFromConfig("Viewport");
     orxMouse_ShowCursor(orxTRUE);
     orxEvent_AddHandler(orxEVENT_TYPE_RENDER, draw_basic);
